@@ -18,13 +18,29 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
 
 def handle_command(cmd):
-    if cmd == "cwd":
+    command = cmd.split()
+    if command[0] == "cwd":
         # print(type(os.getcwd()))
         return json.dumps(os.getcwd())
-    if cmd == "ls":
+    if command[0] == "ls":
         # print(type(os.listdir()))
         return json.dumps(os.listdir())
+    if command[0] == "cd":
+        if len(command) < 2:
+            return json.dumps("Invalid argument")
+        if command[1] in os.listdir():
+            os.chdir(command[1])
+            return json.dumps(os.getcwd())
+        elif command[1] == "../":
+            os.chdir(command[1])
+            return json.dumps(os.getcwd())
+        else:
+            return json.dumps("Directory not present")
+
+    # if command[0] == "dwd"
+    # if command[0] == "upd"
     return json.dumps("Invalid command")
+
 
 def handle_client(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
