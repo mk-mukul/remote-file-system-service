@@ -1,5 +1,6 @@
 import socket
 import json
+import time
 
 HEADER = 64
 PORT = 5050
@@ -20,7 +21,15 @@ def send(msg):
     send_length += b' ' * (HEADER - len(send_length)) #make the lenght of string of lenth 64 byte
     client.send(send_length)
     client.send(message)
-    receive()
+    data = receive()
+    if type(data)==list:
+        for i in data:
+            print(f"{i}", end="\t")
+        print()
+        return
+    print(data)
+    if data == "File sending...":
+        download_file()
 
 def receive():
     msg_length = client.recv(HEADER).decode(FORMAT)
@@ -28,15 +37,36 @@ def receive():
         msg_length = int(msg_length)
         msg = client.recv(msg_length).decode(FORMAT)
         msg = json.loads(msg)
-        print(f"{msg}")
+        return msg
+
+def download_file():
+    file_name = receive()
+    file_size = receive()
+    print(file_name)
+    print(file_size)
+    time.sleep(1)
+    with open("./rec/"+file_name, mode='w', encoding='utf-8') as file:
+        c = 0
+        start_time = time.time()
+        # while c<1:
+        data = receive()
+        # if not data:
+        #     break
+        file.write(data)
+        # c+=len(data)
+        end_time = time.time()
+        total_time = end_time - start_time
+    print(f"File received in ", total_time)
+    
+
 
 connected = True
-
 while connected:
-    msg = str(input(f"{SERVER}:>>"))
+    msg = str(input(f"{SERVER}:~>> "))
     if msg == "exit":
         send(DISCONNECT_MSG)
         print(f"[DISCONNECTED] {ADDR} disconnected.")
+        client.close()
         connected = False
     else:
         send(msg)
