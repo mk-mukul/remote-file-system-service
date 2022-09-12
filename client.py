@@ -6,14 +6,61 @@ import os
 SERVER = 'acer.mkmukul.com'
 PORT = 5050
 ADDR = (SERVER, PORT)
-FORMAT = 'utf-8' # encode and decode format
+FORMAT = 'utf-8'
 HEADER = 64
 CAESAR_OFFSET = 5
+ENC_MODE = 0
+end_selected = input(f"Encreption mode:\n0-> Plain Text (Default)\n1-> Caesar cipher with offset {CAESAR_OFFSET}\n2-> Transpose\nSelect encreption mode: ")
+
+if end_selected:
+    ENC_MODE = int(end_selected)
+
+
 
 client =  socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-client.connect(ADDR)
-print(f"[CONNECTED] {ADDR} connected.")
+
+def start():
+    client.connect(ADDR)
+    send(ENC_MODE)
+    print(f"[CONNECTED] Connected to server {ADDR} with encreption {ENC_MODE}.")  
+    connected = True
+    while connected:
+        msg = str(input(f"{SERVER}:~>> "))
+
+        if msg == "exit":
+            send(msg)
+            print(f"[DISCONNECTED] {ADDR} disconnected.")
+            print(receive())
+            client.close()
+            connected = False
+            break
+
+        if msg.split()[0] == "upd":
+            if msg.split()[1] in os.listdir():
+                if os.path.isfile(msg.split()[1]):
+                    send(msg)
+                    upload_file(msg.split()[1])
+                    print("Status: ", receive())
+                    continue
+                else:
+                    print("File not present")
+                    continue
+            else:
+                print("File not present")
+                continue
+
+        send(msg)
+        data = receive()
+        if type(data)==list:
+            for i in data:
+                print(f"{i}", end="\t")
+            print()
+        elif data == "File sending...":
+            download_file()
+            print("Status: ", receive())
+        else:
+            print(data)
 
 
 def transpose(data):
@@ -90,9 +137,9 @@ def decryption(data, mode):
     return data
 
 def send(data):
-    enc_mode = 1
+    enc_mode = ENC_MODE
     send_data = json.dumps(data)
-    enc_data = encryption(send_data, enc_mode)
+    enc_data = encryption(send_data, ENC_MODE)
     data_length = len(enc_data)
     send_length = str(data_length).encode(FORMAT)
     send_length += b' ' * (HEADER - len(send_length))
@@ -141,44 +188,6 @@ def upload_file(file_name):
         total_time = end_time - start_time
     print(f"File uploaded to {SERVER} in {total_time} seconds")
     return 1
-    
 
-connected = True
-while connected:
-    msg = str(input(f"{SERVER}:~>> "))
-
-    if msg == "exit":
-        send(msg)
-        print(f"[DISCONNECTED] {ADDR} disconnected.")
-        print(receive())
-        client.close()
-        connected = False
-        break
-
-    if msg.split()[0] == "upd":
-        if msg.split()[1] in os.listdir():
-            if os.path.isfile(msg.split()[1]):
-                send(msg)
-                upload_file(msg.split()[1])
-                print("Status: ", receive())
-                continue
-            else:
-                print("File not present")
-                continue
-        else:
-            print("File not present")
-            continue
-
-    send(msg)
-    data = receive()
-    if type(data)==list:
-        for i in data:
-            print(f"{i}", end="\t")
-        print()
-    elif data == "File sending...":
-        download_file()
-        print("Status: ", receive())
-    else:
-        print(data)
-        
-
+ 
+start()

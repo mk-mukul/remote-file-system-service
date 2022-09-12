@@ -8,9 +8,9 @@ SERVER = 'acer.mkmukul.com'
 PORT = 5050
 ADDR = (SERVER, PORT)
 FORMAT = 'utf-8'
-CAESAR_OFFSET = 5
 HEADER = 64
-ENCRYPTION = 0
+ENC_MODE = 0
+CAESAR_OFFSET = 5
 
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -19,6 +19,37 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 def bind_server(ADDR):
     server.bind(ADDR)
 bind_server(ADDR)
+
+
+def start():
+    server.listen(1)
+    print(f"[LISTENING] Server is listening on {SERVER}")
+    while True:
+        conn, addr = server.accept()
+        enc_mode = receive(conn, addr)
+        handle_client(conn, addr, enc_mode)
+        # thread = threading.Thread(target=handle_client, args=(conn, addr))
+        # thread.start()
+        # print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
+
+
+def handle_client(conn, addr, enc_mode):
+    ENC_MODE = enc_mode
+    print(f"[NEW CONNECTION] {addr} connected with encreption mode {ENC_MODE}.")
+    connected = True
+    while connected:    
+        data = receive(conn, addr)
+        if data == "exit":
+            connected = False
+            send(conn, addr, "Connection closed form the server")
+            break
+        print(f"[{addr}] {data}")
+        return_data = handle_command(conn, addr, data)
+        send(conn, addr, return_data)
+    conn.close()
+    print(f"[DISCONNECTED] {addr} disconnected")
+    # print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
+
 
 def transpose(data):
     transpose_data = ""
@@ -94,7 +125,7 @@ def decryption(data, mode):
     return data
 
 def send(conn, addr, data):
-    enc_mode = 1    
+    enc_mode = ENC_MODE    
     send_data = json.dumps(data)
     enc_data = encryption(send_data, enc_mode)
     data_length = len(enc_data)
@@ -116,48 +147,14 @@ def receive(conn, addr):
         return data
 
 
-def start():
-    server.listen(1)
-    print(f"[LISTENING] Server is listening on {SERVER}")
-    while True:
-        conn, addr = server.accept()
-        handle_client(conn, addr)
-        # thread = threading.Thread(target=handle_client, args=(conn, addr))
-        # thread.start()
-        # print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
-
-
-def handle_client(conn, addr):
-    print(f"[NEW CONNECTION] {addr} connected.")
-    connected = True
-    while connected:    
-        data = receive(conn, addr)
-        if data == "exit":
-            connected = False
-            send(conn, addr, "Connection closed form the server")
-            break
-        print(f"[{addr}] {data}")
-        return_data = handle_command(conn, addr, data)
-        send(conn, addr, return_data)
-    conn.close()
-    print(f"[DISCONNECTED] {addr} disconnected")
-    # print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
-
-
-
-
 def handle_command(conn, addr, cmd):
     command = cmd.split()
-
     if not command:
         return ""
-
     if command[0] == "cwd":
         return os.getcwd()
-
     if command[0] == "ls":
         return os.listdir()
-
     if command[0] == "cd":
         if len(command) < 2:
             return "Status: NOK"
@@ -169,7 +166,6 @@ def handle_command(conn, addr, cmd):
             return "Status: OK"
         else:
             return "Directory not present\nStatus: NOK"
-
     if command[0] == "dwd":
         if len(command) < 2:
             return "Invalid argument"
@@ -177,12 +173,10 @@ def handle_command(conn, addr, cmd):
             if os.path.isfile(command[1]):
                 return send_file(conn, addr, command[1])
         return "File not present"
-
     if command[0] == "upd":
         if len(command) < 2:
             return "Invalid argument"
         return receive_file(conn, addr)
-
     return "Invalid command"
 
 
@@ -219,7 +213,6 @@ def receive_file(conn, addr):
     print("Status: OK")
     return "OK"
 
-
-print("[STARTING] server is starting...")
+print(f"[STARTING] Server is starting...")
 start()
 
