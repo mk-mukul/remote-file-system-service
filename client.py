@@ -3,11 +3,12 @@ import json
 import time
 import os
 
-HEADER = 64
-PORT = 5050
 SERVER = 'acer.mkmukul.com'
+PORT = 5050
 ADDR = (SERVER, PORT)
 FORMAT = 'utf-8' # encode and decode format
+HEADER = 64
+CAESAR_OFFSET = 5
 
 client =  socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -15,20 +16,98 @@ client.connect(ADDR)
 print(f"[CONNECTED] {ADDR} connected.")
 
 
-def send(msg):
-    send_msg = json.dumps(msg)
-    msg_length = len(send_msg)
-    send_length = str(msg_length).encode(FORMAT)
-    send_length += b' ' * (HEADER - len(send_length)) # to make string 64 byte
+def transpose(data):
+    transpose_data = ""
+    i = len(data)
+    while i > 0:
+        i-=1
+        transpose_data+=data[i]
+    return transpose_data
+
+def caesar_encrypt(plainText, offset): 
+    cipherText = ""
+    for ch in plainText:
+        if ch.isalpha():
+            stayInAlphabet = ord(ch) + offset 
+            if ch.islower():
+                if stayInAlphabet > ord("z"):
+                    stayInAlphabet -= 26
+                finalLetter = chr(stayInAlphabet)
+                cipherText += finalLetter
+            else:
+                if stayInAlphabet > ord("Z"):
+                    stayInAlphabet -= 26
+                finalLetter = chr(stayInAlphabet)
+                cipherText += finalLetter
+        
+        elif ch.isnumeric():
+            stayInNumeric = ord(ch) + offset
+            if stayInNumeric > ord("9"):
+                stayInNumeric -= 10
+            finalLetter = chr(stayInNumeric)
+            cipherText += finalLetter
+        else:
+            cipherText += ch
+    return cipherText
+
+def caesar_decrypt(cipherText, offset):
+    plainText = ""
+    for ch in cipherText:
+        if ch.isalpha():
+            stayInAlphabet = ord(ch) - offset 
+            if ch.islower():
+                if stayInAlphabet < ord("a"):
+                    stayInAlphabet += 26
+                finalLetter = chr(stayInAlphabet)
+                plainText += finalLetter
+            else:
+                if stayInAlphabet < ord("A"):
+                    stayInAlphabet += 26
+                finalLetter = chr(stayInAlphabet)
+                plainText += finalLetter
+        elif ch.isnumeric():
+            stayInNumeric = ord(ch) - offset
+            if stayInNumeric < ord("0"):
+                stayInNumeric += 10
+            finalLetter = chr(stayInNumeric)
+            plainText += finalLetter
+        else:
+            plainText += ch
+    return plainText
+
+def encryption(data, mode):
+    if mode == 1:
+        return caesar_encrypt(data, CAESAR_OFFSET)
+    elif mode == 2:
+        return transpose(data)
+    return data
+
+def decryption(data, mode):
+    if mode == 1:
+        return caesar_decrypt(data, CAESAR_OFFSET)
+    elif mode == 2:
+        return transpose(data)
+    return data
+
+def send(data):
+    enc_mode = 1
+    send_data = json.dumps(data)
+    enc_data = encryption(send_data, enc_mode)
+    data_length = len(enc_data)
+    send_length = str(data_length).encode(FORMAT)
+    send_length += b' ' * (HEADER - len(send_length))
+    client.send(str(enc_mode).encode(FORMAT))
     client.send(send_length)
-    client.send(send_msg.encode(FORMAT))
+    client.send(enc_data.encode(FORMAT))
 
 
 def receive():
-    data_length = client.recv(HEADER).decode(FORMAT)
-    if data_length:
+    enc_mode = client.recv(1).decode(FORMAT)
+    if enc_mode:
+        data_length = client.recv(HEADER).decode(FORMAT)
         data_length = int(data_length)
-        data = client.recv(data_length).decode(FORMAT)
+        enc_data = client.recv(data_length).decode(FORMAT)
+        data = decryption(enc_data, int(enc_mode))
         data = json.loads(data)
         return data
 

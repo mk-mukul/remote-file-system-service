@@ -4,11 +4,14 @@ import os
 import json
 import time
 
-HEADER = 64 
-PORT = 5050
 SERVER = 'acer.mkmukul.com'
+PORT = 5050
 ADDR = (SERVER, PORT)
-FORMAT = 'utf-8' # encode and decode format
+FORMAT = 'utf-8'
+CAESAR_OFFSET = 5
+HEADER = 64
+ENCRYPTION = 0
+
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -16,6 +19,101 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 def bind_server(ADDR):
     server.bind(ADDR)
 bind_server(ADDR)
+
+def transpose(data):
+    transpose_data = ""
+    i = len(data)
+    while i > 0:
+        i-=1
+        transpose_data+=data[i]
+    return transpose_data
+
+def caesar_encrypt(plainText, offset): 
+    cipherText = ""
+    for ch in plainText:
+        if ch.isalpha():
+            stayInAlphabet = ord(ch) + offset 
+            if ch.islower():
+                if stayInAlphabet > ord("z"):
+                    stayInAlphabet -= 26
+                finalLetter = chr(stayInAlphabet)
+                cipherText += finalLetter
+            else:
+                if stayInAlphabet > ord("Z"):
+                    stayInAlphabet -= 26
+                finalLetter = chr(stayInAlphabet)
+                cipherText += finalLetter
+        
+        elif ch.isnumeric():
+            stayInNumeric = ord(ch) + offset
+            if stayInNumeric > ord("9"):
+                stayInNumeric -= 10
+            finalLetter = chr(stayInNumeric)
+            cipherText += finalLetter
+        else:
+            cipherText += ch
+    return cipherText
+
+def caesar_decrypt(cipherText, offset):
+    plainText = ""
+    for ch in cipherText:
+        if ch.isalpha():
+            stayInAlphabet = ord(ch) - offset 
+            if ch.islower():
+                if stayInAlphabet < ord("a"):
+                    stayInAlphabet += 26
+                finalLetter = chr(stayInAlphabet)
+                plainText += finalLetter
+            else:
+                if stayInAlphabet < ord("A"):
+                    stayInAlphabet += 26
+                finalLetter = chr(stayInAlphabet)
+                plainText += finalLetter
+        elif ch.isnumeric():
+            stayInNumeric = ord(ch) - offset
+            if stayInNumeric < ord("0"):
+                stayInNumeric += 10
+            finalLetter = chr(stayInNumeric)
+            plainText += finalLetter
+        else:
+            plainText += ch
+    return plainText
+
+def encryption(data, mode):
+    if mode == 1:
+        return caesar_encrypt(data, CAESAR_OFFSET)
+    elif mode == 2:
+        return transpose(data)
+    return data
+
+def decryption(data, mode):
+    if mode == 1:
+        return caesar_decrypt(data, CAESAR_OFFSET)
+    elif mode == 2:
+        return transpose(data)
+    return data
+
+def send(conn, addr, data):
+    enc_mode = 1    
+    send_data = json.dumps(data)
+    enc_data = encryption(send_data, enc_mode)
+    data_length = len(enc_data)
+    send_length = str(data_length).encode(FORMAT)
+    send_length += b' ' * (HEADER - len(send_length))
+    conn.send(str(enc_mode).encode(FORMAT))
+    conn.send(send_length)
+    conn.send(enc_data.encode(FORMAT))
+
+
+def receive(conn, addr):
+    enc_mode = conn.recv(1).decode(FORMAT)
+    if enc_mode:
+        data_length = conn.recv(HEADER).decode(FORMAT)
+        data_length = int(data_length)
+        enc_data = conn.recv(data_length).decode(FORMAT)
+        data = decryption(enc_data, int(enc_mode))
+        data = json.loads(data)
+        return data
 
 
 def start():
@@ -46,22 +144,6 @@ def handle_client(conn, addr):
     # print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
 
 
-def send(conn, addr, msg):
-    send_msg = json.dumps(msg)
-    msg_length = len(send_msg)
-    send_length = str(msg_length).encode(FORMAT)
-    send_length += b' ' * (HEADER - len(send_length))
-    conn.send(send_length)
-    conn.send(send_msg.encode(FORMAT))
-
-
-def receive(conn, addr):
-    data_length = conn.recv(HEADER).decode(FORMAT)
-    if data_length:
-        data_length = int(data_length)
-        data = conn.recv(data_length).decode(FORMAT)
-        data = json.loads(data)
-        return data
 
 
 def handle_command(conn, addr, cmd):
