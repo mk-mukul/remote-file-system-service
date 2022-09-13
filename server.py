@@ -1,5 +1,4 @@
 import socket
-import threading
 import os
 import json
 import time
@@ -22,33 +21,32 @@ bind_server(ADDR)
 
 
 def start():
-    server.listen(1)
+    server.listen()
     print(f"[LISTENING] Server is listening on {SERVER}")
     while True:
         conn, addr = server.accept()
         enc_mode = receive(conn, addr)
         handle_client(conn, addr, enc_mode)
-        # thread = threading.Thread(target=handle_client, args=(conn, addr))
-        # thread.start()
-        # print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
 
 
 def handle_client(conn, addr, enc_mode):
+    global ENC_MODE 
     ENC_MODE = enc_mode
     print(f"[NEW CONNECTION] {addr} connected with encreption mode {ENC_MODE}.")
     connected = True
-    while connected:    
-        data = receive(conn, addr)
-        if data == "exit":
+    while connected:
+        print(f"[{addr}]", end=" ")
+        cmd = receive(conn, addr)
+        print(f"{cmd}")
+        if cmd == "exit":
             connected = False
-            send(conn, addr, "Connection closed form the server")
             break
-        print(f"[{addr}] {data}")
-        return_data = handle_command(conn, addr, data)
-        send(conn, addr, return_data)
+        returning_data = handle_command(conn, addr, cmd)
+        send(conn, addr, returning_data)
+
+    send(conn, addr, "Connection closed form the server")
     conn.close()
     print(f"[DISCONNECTED] {addr} disconnected")
-    # print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
 
 
 def transpose(data):
@@ -125,93 +123,122 @@ def decryption(data, mode):
     return data
 
 def send(conn, addr, data):
-    enc_mode = ENC_MODE    
-    send_data = json.dumps(data)
-    enc_data = encryption(send_data, enc_mode)
-    data_length = len(enc_data)
-    send_length = str(data_length).encode(FORMAT)
-    send_length += b' ' * (HEADER - len(send_length))
-    conn.send(str(enc_mode).encode(FORMAT))
-    conn.send(send_length)
-    conn.send(enc_data.encode(FORMAT))
-
+    try:
+        enc_mode = ENC_MODE    
+        send_data = json.dumps(data)
+        enc_data = encryption(send_data, enc_mode)
+        data_length = len(enc_data)
+        send_length = str(data_length).encode(FORMAT)
+        send_length += b' ' * (HEADER - len(send_length))
+        conn.send(str(enc_mode).encode(FORMAT))
+        conn.send(send_length)
+        conn.send(enc_data.encode(FORMAT))
+        return
+    except:
+        return
 
 def receive(conn, addr):
-    enc_mode = conn.recv(1).decode(FORMAT)
-    if enc_mode:
-        data_length = conn.recv(HEADER).decode(FORMAT)
-        data_length = int(data_length)
-        enc_data = conn.recv(data_length).decode(FORMAT)
-        data = decryption(enc_data, int(enc_mode))
-        data = json.loads(data)
-        return data
+    try:
+        enc_mode = conn.recv(1).decode(FORMAT)
+        if enc_mode:
+            data_length = conn.recv(HEADER).decode(FORMAT)
+            data_length = int(data_length)
+            enc_data = conn.recv(data_length).decode(FORMAT)
+            data = decryption(enc_data, int(enc_mode))
+            data = json.loads(data)
+            return data
+    except:
+        return
+
 
 
 def handle_command(conn, addr, cmd):
     command = cmd.split()
     if not command:
         return ""
+    if command[0] == "close":
+        print(f"[CLOSING] server is closing...")
+        send(conn, addr, "Server closed.")
+        server.close()
+        print(f"Server closed.")
+        exit()
     if command[0] == "cwd":
         return os.getcwd()
     if command[0] == "ls":
         return os.listdir()
     if command[0] == "cd":
         if len(command) < 2:
-            return "Status: NOK"
+            return 0
         if command[1] in os.listdir():
-            os.chdir(command[1])
-            return "Status: OK"
+            if not os.path.isfile(command[1]):
+                os.chdir(command[1])
+                return 1
+            else:
+                return 0
         elif command[1] == "../":
             os.chdir(command[1])
-            return "Status: OK"
+            return 1
         else:
-            return "Directory not present\nStatus: NOK"
+            return 0
     if command[0] == "dwd":
         if len(command) < 2:
-            return "Invalid argument"
-        if command[1] in os.listdir():
-            if os.path.isfile(command[1]):
-                return send_file(conn, addr, command[1])
-        return "File not present"
+            send(conn, addr, "Invalid argument")
+            return 0
+        if os.path.isfile(command[1]):
+            send(conn, addr, "sending")
+            return send_file(conn, addr, command[1])
+        send(conn, addr, "File not present")
+        return 0
     if command[0] == "upd":
         if len(command) < 2:
-            return "Invalid argument"
-        return receive_file(conn, addr)
-    return "Invalid command"
+            return 0
+        data = receive(conn, addr)
+        if data == "sending":
+            return receive_file(conn, addr)
+        else:
+            return 0
+    send(conn, addr, "Invalid command")
+    return 0
 
 
 def send_file(conn, addr, file_name):
-    print(f"Sending file to {addr}")
-    print(f"Sending...")
-    send(conn, addr, "File sending...")
-    send(conn, addr, file_name)
-    file_size = os.path.getsize(file_name)
-    send(conn, addr, file_size)
-    with open(file_name, mode='r', encoding='utf-8') as file:
-        start_time = time.time()
-        data = file.read()
-        send(conn, addr, data)
-        end_time = time.time()
-        total_time = end_time - start_time
-    print(f"File send to {addr} in {total_time} seconds")
-    print("Status: OK")
-    return "OK"
+    try:
+        print(f"Sending file to {addr}")
+        print(f"Sending...")
+        send(conn, addr, file_name)
+        file_size = os.path.getsize(file_name)
+        send(conn, addr, file_size)
+        with open(file_name, mode='r', encoding='utf-8') as file:
+            start_time = time.time()
+            data = file.read()
+            send(conn, addr, data)
+            end_time = time.time()
+            total_time = end_time - start_time
+        print(f"File send to {addr} in {total_time} seconds")
+        return 1
+    except:
+        print(f"Some error in sending file to {addr}.")
+        return 0
 
 
 def receive_file(conn, addr):
-    print(f"Receiving file form {addr}")
-    print(f"Receving...")
-    file_name = receive(conn, addr)
-    file_size = receive(conn, addr)
-    with open("./"+file_name, mode='w', encoding='utf-8') as file:
-        start_time = time.time()
-        data = receive(conn, addr)
-        file.write(data)
-        end_time = time.time()
-        total_time = end_time - start_time
-    print(f"File received form {addr} in {total_time} seconds")
-    print("Status: OK")
-    return "OK"
+    try:
+        print(f"Receiving file form {addr}")
+        print(f"Receving...")
+        file_name = receive(conn, addr)
+        file_size = receive(conn, addr)
+        with open("./"+file_name, mode='w', encoding='utf-8') as file:
+            start_time = time.time()
+            data = receive(conn, addr)
+            file.write(data)
+            end_time = time.time()
+            total_time = end_time - start_time
+        print(f"File received form {addr} in {total_time} seconds")
+        return 1
+    except:
+        print(f"Some error in receving file form {addr}.")
+        return 0
+
 
 print(f"[STARTING] Server is starting...")
 start()

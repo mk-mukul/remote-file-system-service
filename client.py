@@ -10,11 +10,13 @@ FORMAT = 'utf-8'
 HEADER = 64
 CAESAR_OFFSET = 5
 ENC_MODE = 0
-end_selected = input(f"Encreption mode:\n0-> Plain Text (Default)\n1-> Caesar cipher with offset {CAESAR_OFFSET}\n2-> Transpose\nSelect encreption mode: ")
+enc_selected = input(f"Encreption mode:\n0-> Plain Text (Default)\n1-> Caesar cipher with offset {CAESAR_OFFSET}\n2-> Transpose\nSelect encreption mode: ")
 
-if end_selected:
-    ENC_MODE = int(end_selected)
-
+if enc_selected=="0" or enc_selected=="1" or enc_selected=="2":
+    ENC_MODE = int(enc_selected)
+elif enc_selected:
+    print("Invalid encreption mode selected.")
+    exit()
 
 
 client =  socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -26,41 +28,69 @@ def start():
     print(f"[CONNECTED] Connected to server {ADDR} with encreption {ENC_MODE}.")  
     connected = True
     while connected:
-        msg = str(input(f"{SERVER}:~>> "))
-
-        if msg == "exit":
-            send(msg)
-            print(f"[DISCONNECTED] {ADDR} disconnected.")
-            print(receive())
-            client.close()
+        cmd = str(input(f"{SERVER}:~>> "))
+        if not cmd:
+            continue
+        send(cmd)
+        if cmd == "exit":
             connected = False
-            break
+            break            
+        handle_command(cmd)
 
-        if msg.split()[0] == "upd":
-            if msg.split()[1] in os.listdir():
-                if os.path.isfile(msg.split()[1]):
-                    send(msg)
-                    upload_file(msg.split()[1])
-                    print("Status: ", receive())
-                    continue
-                else:
-                    print("File not present")
-                    continue
-            else:
-                print("File not present")
-                continue
+    print(receive())
+    client.close()
+    print(f"[DISCONNECTED] {ADDR} disconnected.")
+        
 
-        send(msg)
+def handle_command(cmd):
+
+    if cmd.split()[0] == "cwd":
+        print(receive())
+        return
+
+    if cmd.split()[0] == "ls":
         data = receive()
-        if type(data)==list:
-            for i in data:
-                print(f"{i}", end="\t")
-            print()
-        elif data == "File sending...":
+        for i in data:
+            print(f"\t{i}", end="")
+        print()
+        return
+
+    if cmd.split()[0] == "cd":
+        show_status(receive())
+        return
+
+    if cmd.split()[0] == "dwd":
+        data = receive()
+        if data == "sending":
             download_file()
-            print("Status: ", receive())
         else:
             print(data)
+        show_status(receive())
+        return
+    if cmd.split()[0] == "upd":
+        if len(cmd.split()) < 2:
+            print("Invalid argument")
+        if os.path.isfile(cmd.split()[1]):
+            send("sending")
+            upload_file(cmd.split()[1])
+        else:
+            send("File not present")
+            print("File not present")
+        show_status(receive())
+        return
+    if cmd.split()[0] == "close":
+        print(receive())
+        exit()
+    print(receive())
+    receive()
+    return
+
+
+def show_status(status):
+    if status:
+        print(f"Status: OK")
+    else: 
+        print(f"Status: NOK")
 
 
 def transpose(data):
@@ -136,58 +166,70 @@ def decryption(data, mode):
         return transpose(data)
     return data
 
+
 def send(data):
-    enc_mode = ENC_MODE
-    send_data = json.dumps(data)
-    enc_data = encryption(send_data, ENC_MODE)
-    data_length = len(enc_data)
-    send_length = str(data_length).encode(FORMAT)
-    send_length += b' ' * (HEADER - len(send_length))
-    client.send(str(enc_mode).encode(FORMAT))
-    client.send(send_length)
-    client.send(enc_data.encode(FORMAT))
+    try:
+        enc_mode = ENC_MODE
+        send_data = json.dumps(data)
+        enc_data = encryption(send_data, ENC_MODE)
+        data_length = len(enc_data)
+        send_length = str(data_length).encode(FORMAT)
+        send_length += b' ' * (HEADER - len(send_length))
+        client.send(str(enc_mode).encode(FORMAT))
+        client.send(send_length)
+        client.send(enc_data.encode(FORMAT))
+        return
+    except:
+        return
 
 
 def receive():
-    enc_mode = client.recv(1).decode(FORMAT)
-    if enc_mode:
-        data_length = client.recv(HEADER).decode(FORMAT)
-        data_length = int(data_length)
-        enc_data = client.recv(data_length).decode(FORMAT)
-        data = decryption(enc_data, int(enc_mode))
-        data = json.loads(data)
-        return data
+    try:
+        enc_mode = client.recv(1).decode(FORMAT)
+        if enc_mode:
+            data_length = client.recv(HEADER).decode(FORMAT)
+            data_length = int(data_length)
+            enc_data = client.recv(data_length).decode(FORMAT)
+            data = decryption(enc_data, int(enc_mode))
+            data = json.loads(data)
+            return data
+    except:
+        return
+
 
 
 def download_file():
-    print(f"File downloading from {SERVER}")
-    print(f"Downloading...")
-    file_name = receive()
-    file_size = receive()
-    time.sleep(1)
-    with open("./"+file_name, mode='w', encoding='utf-8') as file:
-        start_time = time.time()
-        data = receive()
-        file.write(data)
-        end_time = time.time()
-        total_time = end_time - start_time
-    print(f"File received from {SERVER} in {total_time} seconds")
-    return 1
+    try:
+        print(f"File downloading from {SERVER}")
+        print(f"Downloading...")
+        file_name = receive()
+        file_size = receive()
+        with open("./"+file_name, mode='w', encoding='utf-8') as file:
+            start_time = time.time()
+            data = receive()
+            file.write(data)
+            end_time = time.time()
+            total_time = end_time - start_time
+        print(f"File downloaded from {SERVER} in {round(total_time, 5)} seconds")
+    except:
+        print(f"Some error in dowloading file from {SERVER}.")
 
 
-def upload_file(file_name): 
-    print(f"File uploading...")     
-    send(file_name)
-    file_size = os.path.getsize(file_name)
-    send(file_size)
-    with open(file_name, mode='r', encoding='utf-8') as file:
-        start_time = time.time()
-        data = file.read()
-        send(data)
-        end_time = time.time()
-        total_time = end_time - start_time
-    print(f"File uploaded to {SERVER} in {total_time} seconds")
-    return 1
+def upload_file(file_name):
+    try: 
+        print(f"File uploading...")     
+        send(file_name)
+        file_size = os.path.getsize(file_name)
+        send(file_size)
+        with open(file_name, mode='r', encoding='utf-8') as file:
+            start_time = time.time()
+            data = file.read()
+            send(data)
+            end_time = time.time()
+            total_time = end_time - start_time
+        print(f"File uploaded to {SERVER} in {round(total_time, 5)} seconds")
+    except:
+        print(f"Some error in uploading file to {SERVER}.")
 
  
 start()
