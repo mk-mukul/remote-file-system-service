@@ -153,6 +153,8 @@ def receive(conn, addr):
 
 
 def handle_command(conn, addr, cmd):
+    if type(cmd) != str:
+        return 0
     command = cmd.split()
     if not command:
         return ""
@@ -208,10 +210,15 @@ def send_file(conn, addr, file_name):
         send(conn, addr, file_name)
         file_size = os.path.getsize(file_name)
         send(conn, addr, file_size)
-        with open(file_name, mode='r', encoding='utf-8') as file:
+        with open("./"+file_name, 'rb') as file:
             start_time = time.time()
-            data = file.read()
-            send(conn, addr, data)
+            while True:
+                file_data = file.read(1024)
+                buffer = len(file_data)
+                send(conn, addr, buffer)
+                if not buffer:
+                    break
+                conn.send(file_data)
             end_time = time.time()
             total_time = end_time - start_time
         print(f"File send to {addr} in {total_time} seconds")
@@ -227,10 +234,14 @@ def receive_file(conn, addr):
         print(f"Receving...")
         file_name = receive(conn, addr)
         file_size = receive(conn, addr)
-        with open("./"+file_name, mode='w', encoding='utf-8') as file:
+        with open("./"+file_name, 'wb') as file:
             start_time = time.time()
-            data = receive(conn, addr)
-            file.write(data)
+            while True:
+                buffer = receive(conn, addr)
+                if not buffer:
+                    break
+                file_data = conn.recv(buffer)
+                file.write(file_data)
             end_time = time.time()
             total_time = end_time - start_time
         print(f"File received form {addr} in {total_time} seconds")

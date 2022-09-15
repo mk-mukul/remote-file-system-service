@@ -204,10 +204,14 @@ def download_file():
         print(f"Downloading...")
         file_name = receive()
         file_size = receive()
-        with open("./"+file_name, mode='w', encoding='utf-8') as file:
+        with open("./"+file_name, 'wb') as file:
             start_time = time.time()
-            data = receive()
-            file.write(data)
+            while True:
+                buffer = receive()
+                if not buffer:
+                    break
+                file_data = client.recv(buffer)
+                file.write(file_data)
             end_time = time.time()
             total_time = end_time - start_time
         print(f"File downloaded from {SERVER} in {round(total_time, 5)} seconds")
@@ -221,10 +225,15 @@ def upload_file(file_name):
         send(file_name)
         file_size = os.path.getsize(file_name)
         send(file_size)
-        with open(file_name, mode='r', encoding='utf-8') as file:
+        with open(file_name, 'rb') as file:
             start_time = time.time()
-            data = file.read()
-            send(data)
+            while True:
+                file_data = file.read(1024)
+                buffer = len(file_data)
+                send(buffer)
+                if not buffer:
+                    break
+                client.send(file_data)
             end_time = time.time()
             total_time = end_time - start_time
         print(f"File uploaded to {SERVER} in {round(total_time, 5)} seconds")
