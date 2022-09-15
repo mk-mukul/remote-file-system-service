@@ -51,6 +51,24 @@ def handle_client(conn, addr, enc_mode):
 
 def transpose(data):
     transpose_data = ""
+    i = 0
+    temp = ""
+    while i < len(data):
+        if not data[i].isalpha():
+            if temp:
+                transpose_data += transpose_word(temp)
+                temp=""
+            transpose_data += data[i]
+        else:
+            temp += data[i]
+        i+=1
+    if temp:
+        transpose_data += transpose_word(temp)
+        temp=""        
+    return transpose_data
+
+def transpose_word(data):
+    transpose_data = ""
     i = len(data)
     while i > 0:
         i-=1
