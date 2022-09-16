@@ -3,23 +3,26 @@ import os
 import json
 import time
 
-SERVER = 'acer.mkmukul.com'
-PORT = 5050
+# ################### Edit according to your need #########################
+SERVER = 'acer.mkmukul.com' # name or ip address of the server ############
+PORT = 5050                 # port on which server will run ###############
+# #########################################################################
+
 ADDR = (SERVER, PORT)
 FORMAT = 'utf-8'
-HEADER = 64
-ENC_MODE = 0
-CAESAR_OFFSET = 5
-
+HEADER = 64 # header size used
+ENC_MODE = 0 # default encryption mode
+CAESAR_OFFSET = 5 # offset used by caesar cipher 
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-
+# bind the server to the host and port
 def bind_server(ADDR):
     server.bind(ADDR)
 bind_server(ADDR)
 
-
+# start the server and started listening for the client
 def start():
     server.listen()
     print(f"[LISTENING] Server is listening on {SERVER}")
@@ -28,7 +31,7 @@ def start():
         enc_mode = receive(conn, addr)
         handle_client(conn, addr, enc_mode)
 
-
+# handle client connection and disconnection
 def handle_client(conn, addr, enc_mode):
     global ENC_MODE 
     ENC_MODE = enc_mode
@@ -47,7 +50,6 @@ def handle_client(conn, addr, enc_mode):
     send(conn, addr, "Connection closed form the server")
     conn.close()
     print(f"[DISCONNECTED] {addr} disconnected")
-
 
 def transpose(data):
     transpose_data = ""
@@ -140,36 +142,43 @@ def decryption(data, mode):
         return transpose(data)
     return data
 
+# send data to the client
 def send(conn, addr, data):
     try:
-        enc_mode = ENC_MODE    
+        enc_mode = ENC_MODE 
+        # conver the data into json string 
         send_data = json.dumps(data)
-        enc_data = encryption(send_data, enc_mode)
+        # encrypt message and add encryption mode as a header
+        enc_data = str(enc_mode) + encryption(send_data, enc_mode)
         data_length = len(enc_data)
         send_length = str(data_length).encode(FORMAT)
         send_length += b' ' * (HEADER - len(send_length))
-        conn.send(str(enc_mode).encode(FORMAT))
+        # send the lenght of message to be transmitted in 64 bytes
         conn.send(send_length)
+        # send the data
         conn.send(enc_data.encode(FORMAT))
         return
     except:
         return
 
+#  receive data form the client
 def receive(conn, addr):
     try:
-        enc_mode = conn.recv(1).decode(FORMAT)
-        if enc_mode:
-            data_length = conn.recv(HEADER).decode(FORMAT)
+        # get the lenght of data to be received next
+        data_length = conn.recv(HEADER).decode(FORMAT)
+        if data_length:
             data_length = int(data_length)
+            # received the encrypted data
             enc_data = conn.recv(data_length).decode(FORMAT)
-            data = decryption(enc_data, int(enc_mode))
+            # decrypt the data on the basis of encryption mode
+            data = decryption(enc_data[1:], int(enc_data[0]))
+            # loads the data in its original form
             data = json.loads(data)
             return data
     except:
         return
 
-
-
+# handle command and send response on the basis of output
 def handle_command(conn, addr, cmd):
     if type(cmd) != str:
         return 0
@@ -220,7 +229,7 @@ def handle_command(conn, addr, cmd):
     send(conn, addr, "Invalid command")
     return 0
 
-
+# send file to the client
 def send_file(conn, addr, file_name):
     try:
         print(f"Sending file to {addr}")
@@ -236,7 +245,7 @@ def send_file(conn, addr, file_name):
                 send(conn, addr, buffer)
                 if not buffer:
                     break
-                conn.send(file_data)
+                send(conn, addr, str(file_data, encoding="utf-8"))
             end_time = time.time()
             total_time = end_time - start_time
         print(f"File send to {addr} in {total_time} seconds")
@@ -245,7 +254,7 @@ def send_file(conn, addr, file_name):
         print(f"Some error in sending file to {addr}.")
         return 0
 
-
+# receive file form the client
 def receive_file(conn, addr):
     try:
         print(f"Receiving file form {addr}")
@@ -258,7 +267,7 @@ def receive_file(conn, addr):
                 buffer = receive(conn, addr)
                 if not buffer:
                     break
-                file_data = conn.recv(buffer)
+                file_data = bytes(receive(conn, addr), encoding="utf-8")
                 file.write(file_data)
             end_time = time.time()
             total_time = end_time - start_time
@@ -270,5 +279,8 @@ def receive_file(conn, addr):
 
 
 print(f"[STARTING] Server is starting...")
+
+# start the server
 start()
 
+# ####################### END ####################

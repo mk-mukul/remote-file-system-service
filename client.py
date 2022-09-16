@@ -3,15 +3,19 @@ import json
 import time
 import os
 
-SERVER = 'acer.mkmukul.com'
-PORT = 5050
+# ################### Edit according to your need #########################
+SERVER = 'acer.mkmukul.com' # name or ip address of the server ############
+PORT = 5050                 # port on which server will run ###############
+# #########################################################################
+
 ADDR = (SERVER, PORT)
 FORMAT = 'utf-8'
-HEADER = 64
-CAESAR_OFFSET = 5
-ENC_MODE = 0
-enc_selected = input(f"Encreption mode:\n0-> Plain Text (Default)\n1-> Caesar cipher with offset {CAESAR_OFFSET}\n2-> Transpose\nSelect encreption mode: ")
+HEADER = 64 # header size used
+CAESAR_OFFSET = 5 # offset used by caesar cipher
+ENC_MODE = 0 # default encryption mode
 
+# take encryption mode from the user
+enc_selected = input(f"Encreption mode:\n0-> Plain Text (Default)\n1-> Caesar cipher with offset {CAESAR_OFFSET}\n2-> Transpose\nSelect encreption mode: ")
 if enc_selected=="0" or enc_selected=="1" or enc_selected=="2":
     ENC_MODE = int(enc_selected)
 elif enc_selected:
@@ -21,9 +25,13 @@ elif enc_selected:
 
 client =  socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-
+# start the connection
 def start():
-    client.connect(ADDR)
+    try:
+        client.connect(ADDR)
+    except:
+        print(SERVER, " not found.")
+        return
     send(ENC_MODE)
     print(f"[CONNECTED] Connected to server {ADDR} with encreption {ENC_MODE}.")  
     connected = True
@@ -41,7 +49,7 @@ def start():
     client.close()
     print(f"[DISCONNECTED] {ADDR} disconnected.")
         
-
+# analysis command and send to the server
 def handle_command(cmd):
 
     if cmd.split()[0] == "cwd":
@@ -70,6 +78,8 @@ def handle_command(cmd):
     if cmd.split()[0] == "upd":
         if len(cmd.split()) < 2:
             print("Invalid argument")
+            show_status(receive())
+            return
         if os.path.isfile(cmd.split()[1]):
             send("sending")
             upload_file(cmd.split()[1])
@@ -85,13 +95,12 @@ def handle_command(cmd):
     receive()
     return
 
-
+# show command status
 def show_status(status):
     if status:
         print(f"Status: OK")
     else: 
         print(f"Status: NOK")
-
 
 def transpose(data):
     transpose_data = ""
@@ -184,38 +193,43 @@ def decryption(data, mode):
         return transpose(data)
     return data
 
-
+# send data tot he server 
 def send(data):
     try:
         enc_mode = ENC_MODE
+        # conver the data into json string 
         send_data = json.dumps(data)
-        enc_data = encryption(send_data, ENC_MODE)
+        # encrypt message and add encryption mode as a header
+        enc_data = str(enc_mode) + encryption(send_data, enc_mode)
         data_length = len(enc_data)
         send_length = str(data_length).encode(FORMAT)
         send_length += b' ' * (HEADER - len(send_length))
-        client.send(str(enc_mode).encode(FORMAT))
+        # send the lenght of message to be transmitted in 64 bytes
         client.send(send_length)
+        # send the data
         client.send(enc_data.encode(FORMAT))
         return
     except:
         return
 
-
+#  receive data form the server
 def receive():
     try:
-        enc_mode = client.recv(1).decode(FORMAT)
-        if enc_mode:
-            data_length = client.recv(HEADER).decode(FORMAT)
+        # get the lenght of data to be received next
+        data_length = client.recv(HEADER).decode(FORMAT)
+        if data_length:
             data_length = int(data_length)
+            # received the encrypted data
             enc_data = client.recv(data_length).decode(FORMAT)
-            data = decryption(enc_data, int(enc_mode))
+            # decrypt the data on the basis of encryption mode
+            data = decryption(enc_data[1:], int(enc_data[0]))
+            # loads the data in its original form
             data = json.loads(data)
             return data
     except:
         return
 
-
-
+# download file form the server
 def download_file():
     try:
         print(f"File downloading from {SERVER}")
@@ -228,7 +242,7 @@ def download_file():
                 buffer = receive()
                 if not buffer:
                     break
-                file_data = client.recv(buffer)
+                file_data = bytes(receive(), encoding="utf-8")
                 file.write(file_data)
             end_time = time.time()
             total_time = end_time - start_time
@@ -236,14 +250,14 @@ def download_file():
     except:
         print(f"Some error in dowloading file from {SERVER}.")
 
-
+# upload file to the server
 def upload_file(file_name):
     try: 
         print(f"File uploading...")     
         send(file_name)
         file_size = os.path.getsize(file_name)
         send(file_size)
-        with open(file_name, 'rb') as file:
+        with open("./"+file_name, 'rb') as file:
             start_time = time.time()
             while True:
                 file_data = file.read(1024)
@@ -251,12 +265,14 @@ def upload_file(file_name):
                 send(buffer)
                 if not buffer:
                     break
-                client.send(file_data)
+                send(str(file_data, encoding="utf-8"))
             end_time = time.time()
             total_time = end_time - start_time
         print(f"File uploaded to {SERVER} in {round(total_time, 5)} seconds")
     except:
         print(f"Some error in uploading file to {SERVER}.")
 
- 
+#  start the client
 start()
+
+# ############################# END ###########################
